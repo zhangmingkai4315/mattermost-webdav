@@ -1,14 +1,14 @@
-# webdav
+# mattermost-webdav
 
-[![Build](https://img.shields.io/travis/hacdias/webdav.svg?style=flat-square)](https://travis-ci.org/hacdias/webdav)
-[![Go Report Card](https://goreportcard.com/badge/github.com/hacdias/webdav?style=flat-square)](https://goreportcard.com/report/hacdias/webdav)
+```mattermost-webdav``` 用来存储grafana产生的静态文件，并提供mattermost消息进行使用，也可以作为通用的文件服务器进行使用
 
-```webdav``` is a simple tool that creates a WebDAV server for you. By default, it runs on a random free port and supports JSON and YAML configuration. Here is a simple YAML configuration example:
+通用的配置如下：
 
 ```yaml
 scope: /path/to/files
 address: 0.0.0.0
 port: 8080
+getWithAuth: false
 users:
   - username: admin
     password: admin
@@ -21,6 +21,43 @@ users:
       - path: /some/file
 ```
 
-You can specify the path to the configuration file using the `--config` flag. By default, it will search for a `config.{yaml,json}` file on your current working directory.
+### 附curl测试方式
 
-Download it [here](https://github.com/hacdias/webdav/releases).
+> 创建文件
+
+```
+curl -i -u admin:admin -T './config.ymal' http://localhost:8080/              
+HTTP/1.1 100 Continue
+
+HTTP/1.1 201 Created
+Etag: "15164693d23b860df9"
+Www-Authenticate: Basic realm="Restricted"
+Date: Sat, 24 Feb 2018 13:38:44 GMT
+Content-Length: 7
+Content-Type: text/plain; charset=utf-8
+
+Created
+```
+
+> 删除文件
+
+```
+curl -i -u admin:admin -X DELETE 'http://localhost:8080/config.ymal' 
+HTTP/1.1 204 No Content
+Www-Authenticate: Basic realm="Restricted"
+Date: Sat, 24 Feb 2018 13:46:44 GMT
+```
+
+> 创建文件夹
+
+```
+curl -i -u admin:admin -X MKCOL 'http://localhost:8080/test' 
+HTTP/1.1 201 Created
+Www-Authenticate: Basic realm="Restricted"
+Date: Sat, 24 Feb 2018 13:47:27 GMT
+Content-Length: 7
+Content-Type: text/plain; charset=utf-8
+
+Created
+```
+

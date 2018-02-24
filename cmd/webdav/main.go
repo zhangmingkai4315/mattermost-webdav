@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -12,7 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/hacdias/webdav"
+	webdav "github.com/zhangmingkai4315/mattermost-webdav"
 	wd "golang.org/x/net/webdav"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -30,7 +31,7 @@ var (
 )
 
 func init() {
-	flag.StringVar(&config, "config", "", "Configuration file")
+	flag.StringVar(&config, "c", "", "Configuration file")
 }
 
 func parseRules(raw []map[string]interface{}) []*webdav.Rule {
@@ -133,27 +134,31 @@ func getConfig() []byte {
 }
 
 type cfg struct {
-	webdav  *webdav.Config
-	address string
-	port    string
-	auth    map[string]string
+	webdav      *webdav.Config
+	address     string
+	port        string
+	getWithAuth bool
+	auth        map[string]string
+	handler     *wd.Handler
 }
 
 func parseConfig() *cfg {
 	file := getConfig()
 
 	data := struct {
-		Address string                   `json:"address" yaml:"address"`
-		Port    string                   `json:"port" yaml:"port"`
-		Scope   string                   `json:"scope" yaml:"scope"`
-		Modify  bool                     `json:"modify" yaml:"modify"`
-		Rules   []map[string]interface{} `json:"rules" yaml:"rules"`
-		Users   []map[string]interface{} `json:"users" yaml:"users"`
+		Address     string                   `json:"address" yaml:"address"`
+		Port        string                   `json:"port" yaml:"port"`
+		Scope       string                   `json:"scope" yaml:"scope"`
+		GetWithAuth bool                     `json:"getWithAuth" yaml:"getWithAuth"`
+		Modify      bool                     `json:"modify" yaml:"modify"`
+		Rules       []map[string]interface{} `json:"rules" yaml:"rules"`
+		Users       []map[string]interface{} `json:"users" yaml:"users"`
 	}{
-		Address: "0.0.0.0",
-		Port:    "0",
-		Scope:   "./",
-		Modify:  true,
+		Address:     "0.0.0.0",
+		Port:        "0",
+		Scope:       "./",
+		GetWithAuth: false,
+		Modify:      true,
 	}
 
 	var err error
@@ -168,9 +173,14 @@ func parseConfig() *cfg {
 	}
 
 	config := &cfg{
-		address: data.Address,
-		port:    data.Port,
-		auth:    map[string]string{},
+		address:     data.Address,
+		port:        data.Port,
+		auth:        map[string]string{},
+		getWithAuth: data.GetWithAuth,
+		handler: &wd.Handler{
+			FileSystem: wd.Dir(data.Scope),
+			LockSystem: wd.NewMemLS(),
+		},
 		webdav: &webdav.Config{
 			User: &webdav.User{
 				Scope:  data.Scope,
@@ -199,14 +209,26 @@ func parseConfig() *cfg {
 
 func basicAuth(c *cfg) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// when somebody send get method and config setting
+		// getWithAuth is equal false direct to serve content
+		// for user.
+		if r.Method == "GET" && c.getWithAuth == false {
+			if r.Method == "GET" {
+				info, err := c.handler.FileSystem.Stat(context.TODO(), r.URL.Path)
+				if err == nil && info.IsDir() {
+					r.Method = "PROPFIND"
+				}
+			}
+			// Runs the WebDAV.
+			c.handler.ServeHTTP(w, r)
+			return
+		}
 		w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
-
 		username, password, authOK := r.BasicAuth()
 		if authOK == false {
 			http.Error(w, "Not authorized", 401)
 			return
 		}
-
 		p, ok := c.auth[username]
 		if !ok {
 			http.Error(w, "Not authorized", 401)
@@ -225,6 +247,7 @@ func basicAuth(c *cfg) http.Handler {
 func main() {
 	flag.Parse()
 	cfg := parseConfig()
+
 	handler := basicAuth(cfg)
 
 	// Builds the address and a listener.

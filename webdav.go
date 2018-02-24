@@ -18,7 +18,6 @@ type Config struct {
 // ServeHTTP determines if the request is for this plugin, and if all prerequisites are met.
 func (c *Config) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	u := c.User
-
 	// Gets the correct user for this request.
 	username, _, ok := r.BasicAuth()
 	if ok {

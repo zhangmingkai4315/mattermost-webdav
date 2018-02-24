@@ -1,0 +1,14 @@
+scope: /tmp/files
+address: 0.0.0.0
+port: 8080
+getWithAuth: false
+users:
+  - username: admin
+    password: admin
+  - username: basic
+    password: basic
+    modify:   false
+    rules:
+      - regex: false
+      - allow: false
+      - path: /webdavpath/file
