@@ -213,11 +213,9 @@ func basicAuth(c *cfg) http.Handler {
 		// getWithAuth is equal false direct to serve content
 		// for user.
 		if r.Method == "GET" && c.getWithAuth == false {
-			if r.Method == "GET" {
-				info, err := c.handler.FileSystem.Stat(context.TODO(), r.URL.Path)
-				if err == nil && info.IsDir() {
-					r.Method = "PROPFIND"
-				}
+			info, err := c.handler.FileSystem.Stat(context.TODO(), r.URL.Path)
+			if err == nil && info.IsDir() {
+				r.Method = "PROPFIND"
 			}
 			// Runs the WebDAV.
 			c.handler.ServeHTTP(w, r)
